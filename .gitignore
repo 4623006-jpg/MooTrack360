@@ -1,0 +1,22 @@
+# すべて無視。そのあと、コードと文書だけを許可する
+*
+!*/
+!*.py
+!*.md
+!README.txt
+!requirements.txt
+!pyproject.toml
+!*.sh
+!.gitignore
+# 許可した中でも、データや生成物、秘密のファイルは除く
+.env
+trash/
+sa_out/
+model/
+__pycache__/
+.venv/
+baseline_out/
+!calibration/Farm2_Area_1_Artboard_config_.json
+!research/idf1_check/bev_calibration_refined/*.json
+!calibration/Farm2_Area_1_Artboard_config_.json
+!research/idf1_check/bev_calibration_refined/*.json

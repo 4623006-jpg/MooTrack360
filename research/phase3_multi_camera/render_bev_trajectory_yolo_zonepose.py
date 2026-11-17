@@ -1,0 +1,319 @@
+"""
+render_bev_trajectory_yolo_zonepose.py
+
+render_bev_frames_yolo_zonepose.pyの検出・融合ロジック(YOLO検出→重複除去→
+有効範囲/floorplan範囲外除外→zone+pose制約統合)をそのまま再利用しつつ、
+phase3_bev_multicam_yolo_check_zonepose.pyと同じSimpleBevTrackerでフレーム間の
+個体IDを継続させ、各個体の移動軌跡を鳥瞰図に重ね描きする。
+
+軌跡は「直近TRAIL_LENGTHフレームだけの尾」をフェードさせながら描く方式
+(古いほど背景色に近づける)。FRAME_START〜FRAME_ENDの全フレームをずっと
+重ねて描くと、長時間では線が密集して個体ごとの動きが読み取れなくなるため。
+
+出力先: OUTPUT_DIR/bev_trajectory_frames_yolo_zonepose/{frame}.png (1フレーム1枚)
+       + OUTPUT_DIR/bev_trajectory_yolo_zonepose.mp4 (MAKE_VIDEO=Trueの場合)
+
+注意: FRAME_END=35990(デフォルト)はFRAME_STEP=10フレーム刻みでも約3600フレーム分の
+YOLO推論が必要になる。実行時間がかなり長くなることを想定しておくこと。
+
+--- 使い方 ---
+    python render_bev_trajectory_yolo_zonepose.py
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from collections import defaultdict, deque
+from typing import Dict, List, Tuple
+
+import cv2
+import numpy as np
+from scipy.optimize import linear_sum_assignment
+
+MOOTRACK_CODE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "calibration")
+if MOOTRACK_CODE_DIR not in sys.path:
+    sys.path.insert(0, MOOTRACK_CODE_DIR)
+
+THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+if THIS_DIR not in sys.path:
+    sys.path.insert(0, THIS_DIR)
+
+from Mootrack_core import (
+    CAM_IDS, ROT_FMT,
+    load_floorplan, apply_camera_overrides, resolve_poses,
+    filter_outside_floorplan_bounds,
+)
+
+# render_bev_frames_yolo_zonepose.py側の検出・融合ロジック・設定値・配色をそのまま再利用
+# (ロジックの二重管理を避けるため。grid_search_overlap_half_width_zonepose.pyが
+# phase3_bev_multicam_yolo_check_zonepose.pyから関数を再利用しているのと同じパターン)
+from render_bev_frames_yolo_zonepose_ver3 import (
+    FLOORPLAN_JSON_PATH, OUTPUT_DIR, XML_DIR, IMAGE_DIR,
+    YOLO_WEIGHTS_PATH, IMAGE_WIDTH_PX,
+    FRAME_STEP,
+    DIST_THR_FUSION_M, OVERLAP_HALF_WIDTH_M, USE_POSE_CONSTRAINT, DEDUP_IOU_THRESHOLD,
+    frame_name, parse_voc_annotation, gt_world_points_per_camera,
+    yolo_world_points_per_camera_with_pose, deduplicate_per_camera,
+    get_adjacent_zones, get_camera_valid_ranges, filter_out_of_range_detections,
+    fuse_frame_zone_pose, draw_regions,
+    GT_MARKER_COLOR_BGR,
+    make_video_from_frames,
+)
+
+# ---------------------------------------------------------------------------
+# 設定
+# ---------------------------------------------------------------------------
+
+FRAME_START = 0
+FRAME_END = 4800  # ここまでの全フレームを処理する(FRAME_STEPはrender script側の値を再利用)
+
+TRAJ_FRAMES_OUT_DIR = OUTPUT_DIR / "bev_trajectory_frames_yolo_zonepose"
+TRAJ_FRAMES_OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# 軌跡として残す直近フレーム数(フェードする尾の長さ)。
+# FRAME_STEP=10(1fpsデータで10フレーム刻み)なら、30フレーム分の尾=約5分間の移動を表示。
+TRAIL_LENGTH = 30
+
+# SimpleBevTracker(phase3版と同一ロジック)のパラメータ
+DIST_THR_TRACK_M = 1.5
+MAX_MISSED_FRAMES = 5
+
+MAKE_VIDEO = True
+VIDEO_FPS = 2
+
+BG_COLOR_BGR = (30, 30, 30)
+
+
+# ---------------------------------------------------------------------------
+# フレーム間追跡(phase3_bev_multicam_yolo_check_zonepose.pyのSimpleBevTrackerと同一実装)
+# ---------------------------------------------------------------------------
+
+class SimpleBevTracker:
+    def __init__(self, dist_thr: float, max_missed: int):
+        self.dist_thr = dist_thr
+        self.max_missed = max_missed
+        self.tracks: Dict[int, dict] = {}
+        self.next_id = 1
+
+    def update(self, fused_points: List[dict]) -> List[Tuple[int, np.ndarray]]:
+        track_ids = list(self.tracks.keys())
+        n_trk, n_det = len(track_ids), len(fused_points)
+        matched_trk, matched_det = set(), set()
+
+        if n_trk > 0 and n_det > 0:
+            cost = np.zeros((n_trk, n_det))
+            for i, tid in enumerate(track_ids):
+                for j, fp in enumerate(fused_points):
+                    cost[i, j] = float(np.linalg.norm(self.tracks[tid]["xy"] - fp["world_xy"]))
+            row_idx, col_idx = linear_sum_assignment(cost)
+            for i, j in zip(row_idx, col_idx):
+                if cost[i, j] <= self.dist_thr:
+                    tid = track_ids[i]
+                    self.tracks[tid]["xy"] = fused_points[j]["world_xy"]
+                    self.tracks[tid]["missed"] = 0
+                    matched_trk.add(tid)
+                    matched_det.add(j)
+
+        for tid in track_ids:
+            if tid not in matched_trk:
+                self.tracks[tid]["missed"] += 1
+
+        self.tracks = {tid: t for tid, t in self.tracks.items() if t["missed"] <= self.max_missed}
+
+        for j, fp in enumerate(fused_points):
+            if j not in matched_det:
+                self.tracks[self.next_id] = {"xy": fp["world_xy"], "missed": 0}
+                self.next_id += 1
+
+        return [(tid, t["xy"]) for tid, t in self.tracks.items() if t["missed"] == 0]
+
+
+# ---------------------------------------------------------------------------
+# 軌跡描画
+# ---------------------------------------------------------------------------
+
+def track_color(track_id: int) -> Tuple[int, int, int]:
+    """track_idごとに安定した色を割り当てる(色相をID依存でずらすだけなので、
+    同じIDなら常に同じ色になる)。"""
+    hue = (track_id * 47) % 180  # 47は180に対してずらし幅が偏りにくい値
+    hsv = np.uint8([[[hue, 200, 255]]])
+    bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0]
+    return int(bgr[0]), int(bgr[1]), int(bgr[2])
+
+
+def draw_trail(
+    canvas: np.ndarray, points: List[Tuple[float, float]], scale: float,
+    base_color: Tuple[int, int, int], bg_color: Tuple[int, int, int] = BG_COLOR_BGR,
+) -> None:
+    """points(古い->新しいの順の世界座標xy)を結ぶ線を、古いほど背景色に近づけて
+    フェードさせながら描く(直近Nフレームだけの尾を表現)。"""
+    n = len(points)
+    if n < 2:
+        return
+    h_px, w_px = canvas.shape[0], canvas.shape[1]
+    for i in range(n - 1):
+        x0, y0 = points[i]
+        x1, y1 = points[i + 1]
+        p0 = (int(x0 * scale), int(y0 * scale))
+        p1 = (int(x1 * scale), int(y1 * scale))
+        if not (0 <= p0[0] < w_px and 0 <= p0[1] < h_px and 0 <= p1[0] < w_px and 0 <= p1[1] < h_px):
+            continue
+        alpha = (i + 1) / n  # 古い(0に近い)ほど薄く、新しい(1)ほど濃くなる
+        color = tuple(int(bg_color[c] * (1 - alpha) + base_color[c] * alpha) for c in range(3))
+        thickness = max(1, int(round(1 + alpha * 2)))
+        cv2.line(canvas, p0, p1, color, thickness, cv2.LINE_AA)
+
+
+def draw_frame_trajectory(
+    frame_idx: int, regions, poses, zones, real_w: float, real_h: float,
+    gt_raw: List[dict], track_outputs: List[Tuple[int, np.ndarray]],
+    track_histories: Dict[int, "deque"], has_gt: bool,
+) -> np.ndarray:
+    scale = 40
+    margin = 110
+    w_px = int(real_w * scale) + margin
+    h_px = int(real_h * scale) + 40
+    # mp4(H.264/mp4v, yuv420p)はw/hが奇数だとchromaのアライメントが崩れて
+    # 緑一色など壊れた映像になることがあるため、偶数に揃える
+    if w_px % 2 != 0:
+        w_px += 1
+    if h_px % 2 != 0:
+        h_px += 1
+    canvas = np.full((h_px, w_px, 3), BG_COLOR_BGR, dtype=np.uint8)
+    draw_regions(canvas, regions, scale)
+
+    for (cam_i, cam_j), (lo, hi) in zones.items():
+        x0, x1 = int(lo * scale), int(hi * scale)
+        overlay = canvas.copy()
+        cv2.rectangle(overlay, (x0, 0), (x1, h_px), (0, 165, 255), -1)
+        cv2.addWeighted(overlay, 0.15, canvas, 0.85, 0, canvas)
+
+    for cid in CAM_IDS:
+        p = poses[cid]
+        px, py = int(p.t[0] * scale), int(p.t[1] * scale)
+        if 0 <= px < w_px and 0 <= py < h_px:
+            cv2.circle(canvas, (px, py), 9, (0, 0, 255), -1)
+            cv2.circle(canvas, (px, py), 11, (255, 255, 255), 2)
+            cv2.putText(canvas, cid, (px + 14, py - 8), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5, (255, 255, 255), 1, cv2.LINE_AA)
+
+    # GT(アノテーションがあるフレームのみ、参考として薄く表示)
+    if has_gt:
+        for item in gt_raw:
+            xy = item["world_xy"]
+            px, py = int(xy[0] * scale), int(xy[1] * scale)
+            if 0 <= px < w_px and 0 <= py < h_px:
+                cv2.drawMarker(canvas, (px, py), GT_MARKER_COLOR_BGR, markerType=cv2.MARKER_CROSS,
+                               markerSize=8, thickness=1)
+
+    # 軌跡(直近TRAIL_LENGTHフレームの尾)
+    for tid, _xy in track_outputs:
+        hist = track_histories.get(tid)
+        if hist:
+            draw_trail(canvas, list(hist), scale, track_color(tid))
+
+    # 現在位置(track_idで色分け、ラベル付き)
+    for tid, xy in track_outputs:
+        px, py = int(xy[0] * scale), int(xy[1] * scale)
+        if 0 <= px < w_px and 0 <= py < h_px:
+            color = track_color(tid)
+            cv2.circle(canvas, (px, py), 7, color, -1)
+            cv2.circle(canvas, (px, py), 9, (255, 255, 255), 1)
+            cv2.putText(canvas, f"ID{tid}", (px + 8, py - 8), cv2.FONT_HERSHEY_SIMPLEX,
+                        0.38, color, 1, cv2.LINE_AA)
+
+    gt_label = "" if has_gt else "  (GT無し)"
+    header = f"{frame_name(frame_idx)}  track={len(track_outputs)}{gt_label}"
+    cv2.putText(canvas, header, (8, h_px - 10), cv2.FONT_HERSHEY_SIMPLEX,
+                0.55, (255, 255, 255), 1, cv2.LINE_AA)
+
+    return canvas
+
+
+def main():
+    from ultralytics import YOLO
+
+    print("floorplan.json 読み込み中...")
+    regions, cameras_json, real_w, real_h = load_floorplan(FLOORPLAN_JSON_PATH)
+    cameras_json = apply_camera_overrides(cameras_json)
+    poses = resolve_poses(cameras_json, root="Area1", fmt=ROT_FMT)
+
+    zones = get_adjacent_zones(poses, CAM_IDS, OVERLAP_HALF_WIDTH_M)
+    valid_ranges = get_camera_valid_ranges(CAM_IDS, zones)
+
+    print(f"YOLOモデル読み込み中: {YOLO_WEIGHTS_PATH}")
+    yolo_model = YOLO(YOLO_WEIGHTS_PATH)
+
+    xml_dir = Path(XML_DIR)
+    image_dir = Path(IMAGE_DIR)
+    frame_indices = list(range(FRAME_START, FRAME_END + 1, FRAME_STEP))
+    print(f"対象フレーム数: {len(frame_indices)} "
+          f"(frame_start={FRAME_START}, frame_end={FRAME_END}, step={FRAME_STEP})")
+    print("※ フレーム数が多いため、実行には時間がかかる想定")
+
+    tracker = SimpleBevTracker(dist_thr=DIST_THR_TRACK_M, max_missed=MAX_MISSED_FRAMES)
+    track_histories: Dict[int, deque] = defaultdict(lambda: deque(maxlen=TRAIL_LENGTH))
+
+    saved_paths = []
+    n_skipped_no_image = 0
+    for frame_idx in frame_indices:
+        xml_path = xml_dir / f"{frame_name(frame_idx)}.xml"
+        image_path = image_dir / f"{frame_name(frame_idx)}.jpg"
+        if not image_path.exists():
+            n_skipped_no_image += 1
+            continue
+
+        # GTアノテーション(xml)が無いフレームでも軌跡画像は生成できるようにする
+        has_gt = xml_path.exists()
+        if has_gt:
+            gt_objects = parse_voc_annotation(xml_path)
+            gt_per_camera_raw = gt_world_points_per_camera(gt_objects, poses, IMAGE_WIDTH_PX)
+            gt_per_camera_filtered = filter_out_of_range_detections(gt_per_camera_raw, valid_ranges)
+            gt_raw = [
+                {"name": it["name"], "cam_id": cam_id, "world_xy": it["world_xy"]}
+                for cam_id, items in gt_per_camera_filtered.items() for it in items
+            ]
+        else:
+            gt_raw = []
+
+        per_camera_raw = yolo_world_points_per_camera_with_pose(yolo_model, image_path, poses)
+        per_camera_deduped = deduplicate_per_camera(per_camera_raw, DEDUP_IOU_THRESHOLD)
+        per_camera_filtered = filter_out_of_range_detections(per_camera_deduped, valid_ranges)
+        # 牛舎(floorplan)の矩形範囲の外側に投影された検出(固定的な幽霊検出の主因)を除外
+        per_camera_filtered = filter_outside_floorplan_bounds(
+            per_camera_filtered, real_w, real_h, margin_m=0.0, verbose=False
+        )
+        fused_points = fuse_frame_zone_pose(
+            per_camera_filtered, CAM_IDS, zones, DIST_THR_FUSION_M, USE_POSE_CONSTRAINT
+        )
+
+        # このフレームで実際にマッチした(=missed==0)track_idとその位置だけが返る
+        track_outputs = tracker.update(fused_points)
+        for tid, xy in track_outputs:
+            track_histories[tid].append((float(xy[0]), float(xy[1])))
+
+        canvas = draw_frame_trajectory(
+            frame_idx, regions, poses, zones, real_w, real_h,
+            gt_raw, track_outputs, track_histories, has_gt,
+        )
+        out_path = TRAJ_FRAMES_OUT_DIR / f"{frame_name(frame_idx)}.png"
+        cv2.imwrite(str(out_path), canvas)
+        saved_paths.append(out_path)
+
+        if len(saved_paths) % 50 == 0:
+            print(f"  {len(saved_paths)}/{len(frame_indices)} フレーム処理済み "
+                  f"(直近: {frame_name(frame_idx)}, 現在track数={len(track_outputs)})")
+
+    print(f"\n{len(saved_paths)}枚のBEV軌跡画像を保存しました: {TRAJ_FRAMES_OUT_DIR}")
+    if n_skipped_no_image:
+        print(f"(画像が見つからずスキップしたフレーム数: {n_skipped_no_image})")
+
+    if MAKE_VIDEO and saved_paths:
+        video_path = OUTPUT_DIR / "bev_trajectory_yolo_zonepose.mp4"
+        make_video_from_frames(TRAJ_FRAMES_OUT_DIR, video_path, VIDEO_FPS, saved_paths)
+
+
+if __name__ == "__main__":
+    main()

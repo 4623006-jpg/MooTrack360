@@ -1,0 +1,582 @@
+{
+  "metadata": {
+    "floorplan_image": "Stable3\\SVG\\Stable3_Area_1_Artboard_conv.svg",
+    "units": "meters",
+    "image_resolution": {
+      "width": 4400,
+      "height": 1500
+    },
+    "real_world_dimensions": {
+      "width": 44.0,
+      "height": 15.0
+    }
+  },
+  "coordinate_transform": {
+    "kind": "scale_offset",
+    "scale": [
+      0.01,
+      0.01
+    ],
+    "offset": [
+      0.0,
+      0.0
+    ]
+  },
+  "semantic_regions": [
+    {
+      "name": "Bed_1",
+      "type": "cow_beds",
+      "polygon_world_meters": [
+        [
+          4.88,
+          3.7045999999999997
+        ],
+        [
+          26.98,
+          3.7045999999999997
+        ],
+        [
+          26.98,
+          9.4046
+        ],
+        [
+          4.88,
+          9.4046
+        ]
+      ]
+    },
+    {
+      "name": "Bed_2",
+      "type": "cow_beds",
+      "polygon_world_meters": [
+        [
+          1.25,
+          12.0046
+        ],
+        [
+          30.98,
+          12.0046
+        ],
+        [
+          30.98,
+          15.0046
+        ],
+        [
+          1.25,
+          15.0046
+        ]
+      ]
+    },
+    {
+      "name": "Feeding_Bay_1",
+      "type": "feeding_bay",
+      "polygon_world_meters": [
+        [
+          31.0596,
+          -0.0089
+        ],
+        [
+          37.7296,
+          -0.0089
+        ],
+        [
+          37.7296,
+          0.9911
+        ],
+        [
+          31.0596,
+          0.9911
+        ]
+      ]
+    },
+    {
+      "name": "Wall_1",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          30.98,
+          9.46
+        ],
+        [
+          30.98,
+          0.0046
+        ]
+      ]
+    },
+    {
+      "name": "Hay_Area_1",
+      "type": "hay_area",
+      "polygon_world_meters": [
+        [
+          36.69,
+          3.7476
+        ],
+        [
+          42.7929,
+          3.7476
+        ],
+        [
+          42.7929,
+          13.6114
+        ],
+        [
+          36.69,
+          13.6114
+        ]
+      ]
+    },
+    {
+      "name": "Bed_3",
+      "type": "cow_beds",
+      "polygon_world_meters": [
+        [
+          33.58,
+          3.7045999999999997
+        ],
+        [
+          36.69,
+          3.7045999999999997
+        ],
+        [
+          36.69,
+          13.568399999999999
+        ],
+        [
+          33.58,
+          13.568399999999999
+        ]
+      ]
+    },
+    {
+      "name": "Wall_2",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          36.69,
+          3.7794
+        ],
+        [
+          36.69,
+          13.579400000000001
+        ]
+      ]
+    },
+    {
+      "name": "Wall_3",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          38.4989,
+          3.7794
+        ],
+        [
+          33.5929,
+          3.7794
+        ]
+      ]
+    },
+    {
+      "name": "Wall_4",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          36.69,
+          13.6149
+        ],
+        [
+          33.58,
+          13.616800000000001
+        ]
+      ]
+    },
+    {
+      "name": "Wall_5",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          31.080000000000002,
+          12.0046
+        ],
+        [
+          29.580000000000002,
+          9.46
+        ]
+      ]
+    },
+    {
+      "name": "Wall_6",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          29.580000000000002,
+          9.46
+        ],
+        [
+          29.580000000000002,
+          6.26
+        ]
+      ]
+    },
+    {
+      "name": "Wall_7",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          41.2296,
+          13.6159
+        ],
+        [
+          36.69,
+          13.6159
+        ]
+      ]
+    },
+    {
+      "name": "Wall_8",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          42.7996,
+          12.131300000000001
+        ],
+        [
+          41.2804,
+          13.6203
+        ]
+      ]
+    },
+    {
+      "name": "Wall_9",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          4.88,
+          9.4046
+        ],
+        [
+          4.88,
+          3.7045999999999997
+        ]
+      ]
+    },
+    {
+      "name": "Wall_10",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          26.968899999999998,
+          9.4046
+        ],
+        [
+          26.968899999999998,
+          3.7045999999999997
+        ]
+      ]
+    },
+    {
+      "name": "Wall_11",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          1.25,
+          15.0046
+        ],
+        [
+          1.25,
+          12.0046
+        ]
+      ]
+    },
+    {
+      "name": "Gate_1",
+      "type": "gate",
+      "polygon_world_meters": [
+        [
+          1.25,
+          12.0046
+        ],
+        [
+          0.0,
+          12.0046
+        ]
+      ]
+    },
+    {
+      "name": "Wall_12",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          31.080000000000002,
+          15.0046
+        ],
+        [
+          31.080000000000002,
+          12.0046
+        ]
+      ]
+    },
+    {
+      "name": "Gate_2",
+      "type": "gate",
+      "polygon_world_meters": [
+        [
+          41.33,
+          3.7794
+        ],
+        [
+          38.4715,
+          3.7794
+        ]
+      ]
+    },
+    {
+      "name": "Wall_13",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          41.39,
+          3.7794
+        ],
+        [
+          42.69,
+          3.7794
+        ]
+      ]
+    },
+    {
+      "name": "Milking_Station_1",
+      "type": "milking_station",
+      "polygon_world_meters": [
+        [
+          0.0,
+          4.0546
+        ],
+        [
+          1.8,
+          4.0546
+        ],
+        [
+          1.8,
+          9.0546
+        ],
+        [
+          0.0,
+          9.0546
+        ]
+      ]
+    },
+    {
+      "name": "Wall_14",
+      "type": "wall",
+      "polygon_world_meters": [
+        [
+          38.3533,
+          0.0567
+        ],
+        [
+          38.3533,
+          3.7794
+        ]
+      ]
+    },
+    {
+      "name": "Water_1",
+      "type": "water",
+      "polygon_world_meters": [
+        [
+          38.0533,
+          0.2465
+        ],
+        [
+          38.6533,
+          0.2465
+        ],
+        [
+          38.6533,
+          1.6465
+        ],
+        [
+          38.0533,
+          1.6465
+        ]
+      ]
+    },
+    {
+      "name": "Water_2",
+      "type": "water",
+      "polygon_world_meters": [
+        [
+          4.214700000000001,
+          4.0546
+        ],
+        [
+          4.8147,
+          4.0546
+        ],
+        [
+          4.8147,
+          9.0546
+        ],
+        [
+          4.214700000000001,
+          9.0546
+        ]
+      ]
+    },
+    {
+      "name": "Feeding_Bay_2",
+      "type": "feeding_bay",
+      "polygon_world_meters": [
+        [
+          0.0,
+          -0.0089
+        ],
+        [
+          30.8952,
+          -0.0089
+        ],
+        [
+          30.8952,
+          0.9911
+        ],
+        [
+          0.0,
+          0.9911
+        ]
+      ]
+    },
+    {
+      "name": "Cow_Brushes_1",
+      "type": "cow_brushes",
+      "polygon_world_meters": [
+        [
+          26.702199999999998,
+          2.446
+        ],
+        [
+          27.2355,
+          2.446
+        ],
+        [
+          27.2355,
+          3.7793
+        ],
+        [
+          26.702199999999998,
+          3.7793
+        ]
+      ]
+    },
+    {
+      "name": "Cow_Brushes_2",
+      "type": "cow_brushes",
+      "polygon_world_meters": [
+        [
+          32.246700000000004,
+          3.5126999999999997
+        ],
+        [
+          33.58,
+          3.5126999999999997
+        ],
+        [
+          33.58,
+          4.045999999999999
+        ],
+        [
+          32.246700000000004,
+          4.045999999999999
+        ]
+      ]
+    },
+    {
+      "name": "Feeding_Bay_3",
+      "type": "feeding_bay",
+      "polygon_world_meters": [
+        [
+          38.9396,
+          -0.0089
+        ],
+        [
+          44.0,
+          -0.0089
+        ],
+        [
+          44.0,
+          0.9911
+        ],
+        [
+          38.9396,
+          0.9911
+        ]
+      ]
+    },
+    {
+      "name": "Milking_Station_2",
+      "type": "milking_station",
+      "polygon_world_meters": [
+        [
+          42.69,
+          2.2323
+        ],
+        [
+          43.9587,
+          2.2323
+        ],
+        [
+          43.9587,
+          12.2177
+        ],
+        [
+          42.69,
+          12.2177
+        ]
+      ]
+    }
+  ],
+"cameras": [
+    {
+      "parent": "Area1",
+      "child": "Camera_1",
+      "serial_no_id": "0002D1AA8CA3",
+      "params": [  
+        7.9, 
+        6.3, 
+        -4.403, 
+        -0.55, 
+        -1.44, 
+        -1.38
+      ],
+      "description": "Camera mount"
+    },
+    {
+      "parent": "Camera_1",
+      "child": "Camera_2",
+      "serial_no_id": "0002D1AA8C9F",
+      "params": [
+        13.8, 
+        0.1, 
+        0.53, 
+        -7.42, 
+        0.382, 
+        0.256
+      ],
+      "description": "Camera mount"
+    },
+    {
+      "parent": "Camera_2",
+      "child": "Camera_3",
+      "serial_no_id": "0002D1AAFF25",
+      "params": [
+        12.7, 
+        0.2, 
+        -0.746, 
+        11, 
+        2, 
+        0.9255
+      ],
+      "description": "Camera mount"
+    }
+  ]
+}
+
